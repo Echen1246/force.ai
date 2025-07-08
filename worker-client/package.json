@@ -12,9 +12,10 @@
     "dist": "electron-builder --publish=never"
   },
   "dependencies": {
-    "ws": "^8.14.2",
+    "dotenv": "^17.1.0",
+    "node-fetch": "^3.3.2",
     "uuid": "^9.0.1",
-    "node-fetch": "^3.3.2"
+    "ws": "^8.14.2"
   },
   "devDependencies": {
     "electron": "^28.1.0",
@@ -23,7 +24,12 @@
   "engines": {
     "node": ">=16.0.0"
   },
-  "keywords": ["browser-use", "automation", "worker", "electron"],
+  "keywords": [
+    "browser-use",
+    "automation",
+    "worker",
+    "electron"
+  ],
   "author": "",
   "license": "MIT",
   "build": {
@@ -51,4 +57,4 @@
       "target": "AppImage"
     }
   }
-} 
+}

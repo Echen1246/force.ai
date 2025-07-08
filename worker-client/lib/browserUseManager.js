@@ -2,6 +2,9 @@ const EventEmitter = require('events');
 const { spawn } = require('child_process');
 const path = require('path');
 
+// Load environment variables from .env file
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
+
 class BrowserUseManager extends EventEmitter {
   constructor() {
     super();
