@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Browser Use Admin Panel</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🤖 Browser Use Orchestration Panel</h1>
+            <div class="connection-status">
+                <div id="connection-indicator" class="status-offline">Disconnected</div>
+                <div class="token-display">
+                    Worker Token: <span id="current-token">-</span>
+                    <span id="token-expiry" class="token-expiry"></span>
+                </div>
+            </div>
+        </header>
+
+        <div class="main-content">
+            <!-- Workers Section -->
+            <section class="panel">
+                <h2>📊 Connected Workers</h2>
+                <div id="workers-list" class="workers-grid">
+                    <div class="no-workers">No workers connected</div>
+                </div>
+            </section>
+
+            <!-- Task Assignment Section -->
+            <section class="panel">
+                <h2>📝 Task Assignment</h2>
+                <div class="task-form">
+                    <div class="form-group">
+                        <label for="task-input">Task Description:</label>
+                        <textarea id="task-input" placeholder="Enter task in natural language (e.g., 'Login to Gmail and check for new emails')"></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="worker-select">Target Worker:</label>
+                        <select id="worker-select">
+                            <option value="all">All Workers</option>
+                        </select>
+                    </div>
+                    
+                    <button id="send-task-btn" class="btn-primary" disabled>Send Task</button>
+                </div>
+            </section>
+
+            <!-- Credentials Section -->
+            <section class="panel">
+                <h2>🔐 Credential Store</h2>
+                <div class="credentials-section">
+                    <div class="add-credential">
+                        <input type="text" id="cred-key" placeholder="Credential key (e.g., 'google username')">
+                        <input type="text" id="cred-value" placeholder="Credential value">
+                        <button id="add-cred-btn" class="btn-secondary">Add/Update</button>
+                    </div>
+                    <div id="credentials-list" class="credentials-grid"></div>
+                </div>
+            </section>
+
+            <!-- Logs Section -->
+            <section class="panel logs-panel">
+                <h2>📋 Execution Logs</h2>
+                <div class="logs-controls">
+                    <button id="clear-logs-btn" class="btn-secondary">Clear Logs</button>
+                    <label>
+                        <input type="checkbox" id="auto-scroll" checked> Auto-scroll
+                    </label>
+                </div>
+                <div id="logs-container" class="logs-container"></div>
+            </section>
+        </div>
+    </div>
+
+    <!-- Templates -->
+    <template id="worker-card-template">
+        <div class="worker-card">
+            <div class="worker-header">
+                <h3 class="worker-name"></h3>
+                <div class="worker-status"></div>
+            </div>
+            <div class="worker-info">
+                <div class="worker-id"></div>
+                <div class="worker-task"></div>
+                <div class="worker-last-seen"></div>
+            </div>
+        </div>
+    </template>
+
+    <template id="credential-item-template">
+        <div class="credential-item">
+            <div class="credential-key"></div>
+            <div class="credential-value"></div>
+            <button class="delete-btn">×</button>
+        </div>
+    </template>
+
+    <template id="log-entry-template">
+        <div class="log-entry">
+            <span class="log-timestamp"></span>
+            <span class="log-source"></span>
+            <span class="log-level"></span>
+            <span class="log-message"></span>
+        </div>
+    </template>
+
+    <script src="script.js"></script>
+</body>
+</html> 
