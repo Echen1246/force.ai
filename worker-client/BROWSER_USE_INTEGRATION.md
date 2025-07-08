@@ -1,10 +1,21 @@
 git # Browser Use Integration Guide
 
 ## ✅ Current Status
-- **OpenAI API Key**: Configured and working
+- **OpenAI API Key**: Environment variable setup required
 - **Browser Use**: Installed and tested successfully  
 - **Virtual Environment**: Set up with all dependencies
 - **Integration**: Complete and functional
+
+## 🔑 API Key Setup
+Before running the worker, set your OpenAI API key:
+
+```bash
+# Set for current session
+export OPENAI_API_KEY="sk-proj-your-api-key-here"
+
+# Or add to your shell profile for permanent setup
+echo 'export OPENAI_API_KEY="sk-proj-your-api-key-here"' >> ~/.zshrc
+```
 
 ## Understanding the "Popup" Behavior
 

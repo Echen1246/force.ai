@@ -40,18 +40,17 @@ class BrowserUseManager extends EventEmitter {
   }
 
   loadConfiguration() {
-    // Set the OpenAI API key directly - this would normally come from admin interface
-    this.apiKey = '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';
+    // Load API key from environment variable - set this in your shell or .env file
+    this.apiKey = process.env.OPENAI_API_KEY || process.env.DEEPSEEK_API_KEY;
     
-    // Also try environment variables as fallback
-    if (!this.apiKey) {
-      this.apiKey = process.env.OPENAI_API_KEY || process.env.DEEPSEEK_API_KEY;
-    }
+    // For development, you can also set it directly here (but don't commit to Git):
+    // this.apiKey = 'your-api-key-here';
     
     if (!this.apiKey) {
-      this.emit('log', 'Warning: No API key configured. Browser Use will not work without an OpenAI or DeepSeek API key.', 'warning');
+      this.emit('log', 'Warning: No API key configured. Set OPENAI_API_KEY environment variable.', 'warning');
+      this.emit('log', 'For development: export OPENAI_API_KEY="your-key-here"', 'info');
     } else {
-      this.emit('log', 'OpenAI API key configured successfully');
+      this.emit('log', 'API key configured successfully');
     }
   }
 
