@@ -59,6 +59,10 @@ out/
 tmp/
 temp/
 
-# Data files (uncomment if you want to ignore data)
-# data/
-# *.json
+# Data files (preserve structure but ignore actual data)
+admin-webapp/data/*.json
+worker-client/data/*.json
+
+# Keep directory structure
+!admin-webapp/data/.gitkeep
+!worker-client/data/.gitkeep
