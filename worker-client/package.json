@@ -1,0 +1,54 @@
+{
+  "name": "browser-use-worker",
+  "version": "1.0.0",
+  "description": "Worker client for Browser Use orchestration platform",
+  "main": "main.js",
+  "scripts": {
+    "setup": "node setup.js",
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder --publish=never"
+  },
+  "dependencies": {
+    "ws": "^8.14.2",
+    "uuid": "^9.0.1",
+    "node-fetch": "^3.3.2"
+  },
+  "devDependencies": {
+    "electron": "^28.1.0",
+    "electron-builder": "^24.9.1"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "keywords": ["browser-use", "automation", "worker", "electron"],
+  "author": "",
+  "license": "MIT",
+  "build": {
+    "appId": "com.browseruse.worker",
+    "productName": "Browser Use Worker",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**/*",
+      "lib/**/*",
+      "python/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": "dmg"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
+  }
+} 
