@@ -1,6 +1,22 @@
 {
+  "name": "force-ai-platform",
+  "version": "1.0.0",
+  "description": "Browser Use Orchestration Platform - Distributed browser automation with admin webapp and worker clients",
+  "main": "admin-webapp/server.js",
+  "scripts": {
+    "start": "cd admin-webapp && npm install && node server.js",
+    "dev": "cd admin-webapp && node server.js",
+    "install-admin": "cd admin-webapp && npm install",
+    "install-worker": "cd worker-client && npm install"
+  },
   "dependencies": {
     "node-fetch": "^3.3.2",
     "ws": "^8.18.3"
-  }
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": ["browser-automation", "orchestration", "admin-webapp", "worker-client"],
+  "author": "Force.ai",
+  "license": "MIT"
 }
