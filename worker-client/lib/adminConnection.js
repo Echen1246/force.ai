@@ -13,6 +13,9 @@ class AdminConnection extends EventEmitter {
     this.reconnectInterval = 3000; // 3 seconds
     this.heartbeatInterval = null;
     this.workerInfo = null;
+    this.lastMessageSent = 0; // Track last message sent time
+    this.lastActivityTime = 0; // Track last activity time
+    this.isExecutingTask = false; // Track if a task is currently being executed
   }
 
   async connect() {
@@ -173,6 +176,12 @@ class AdminConnection extends EventEmitter {
   send(message) {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(message));
+      this.lastMessageSent = Date.now();
+      
+      // Status updates and task completions count as activity
+      if (message.type === 'STATUS_UPDATE' || message.type === 'TASK_COMPLETE') {
+        this.lastActivityTime = Date.now();
+      }
     } else {
       console.error('❌ Cannot send message: WebSocket not connected');
     }
@@ -232,14 +241,29 @@ class AdminConnection extends EventEmitter {
   }
 
   startHeartbeat() {
+    // Smart heartbeat: only send when idle, and use status updates as heartbeats
     this.heartbeatInterval = setInterval(() => {
-      if (this.isConnected) {
+      if (this.isConnected && this.shouldSendHeartbeat()) {
         this.send({
           type: 'HEARTBEAT',
           timestamp: new Date().toISOString()
         });
       }
-    }, 30000); // Send heartbeat every 30 seconds
+    }, 60000); // Check every 60 seconds (reduced frequency)
+  }
+
+  shouldSendHeartbeat() {
+    // Don't send heartbeat if we've sent any message recently
+    const timeSinceLastMessage = Date.now() - (this.lastMessageSent || 0);
+    const timeSinceLastActivity = Date.now() - (this.lastActivityTime || 0);
+    
+    // Only send heartbeat if:
+    // 1. No message sent in last 5 minutes
+    // 2. No activity (task execution) in last 10 minutes  
+    // 3. Not currently executing a task
+    return timeSinceLastMessage > 5 * 60 * 1000 && // 5 minutes
+           timeSinceLastActivity > 10 * 60 * 1000 && // 10 minutes  
+           !this.isExecutingTask;
   }
 
   stopHeartbeat() {
@@ -285,6 +309,13 @@ class AdminConnection extends EventEmitter {
       registered: this.isRegistered,
       reconnectAttempts: this.reconnectAttempts
     };
+  }
+
+  setTaskExecutionStatus(isExecuting) {
+    this.isExecutingTask = isExecuting;
+    if (isExecuting) {
+      this.lastActivityTime = Date.now();
+    }
   }
 }
 

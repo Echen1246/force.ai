@@ -1,9 +1,10 @@
 const { v4: uuidv4 } = require('uuid');
 
 class MessageRouter {
-  constructor(wss, workerManager) {
+  constructor(wss, workerManager, credentialStore) {
     this.wss = wss;
     this.workerManager = workerManager;
+    this.credentialStore = credentialStore;
     this.adminConnections = new Set();
   }
 
@@ -113,48 +114,55 @@ class MessageRouter {
   }
 
   handleTaskAssignment(payload) {
-    const { workerId, task, targetAll } = payload;
+    const { task, targetWorker } = payload;
     
-    try {
-      const taskObj = {
-        id: uuidv4(),
-        description: task,
-        assignedAt: new Date().toISOString(),
-        credentials: payload.credentials || {}
-      };
-      
-      let results = [];
-      
-      if (targetAll) {
-        // Broadcast to all workers
-        results = this.workerManager.broadcastTask(taskObj);
-        console.log(`📤 Task broadcasted to ${results.length} workers`);
-      } else if (workerId) {
-        // Send to specific worker
-        const success = this.workerManager.assignTask(workerId, taskObj);
-        if (success) {
-          results = [workerId];
-          console.log(`📤 Task assigned to worker: ${workerId}`);
+    if (!task) {
+      console.error('❌ No task provided in assignment');
+      return;
+    }
+    
+    console.log(`📋 Assigning task: "${task}" to ${targetWorker || 'all workers'}`);
+    
+    // Get all available credentials for the task
+    const credentials = this.credentialStore ? this.credentialStore.getAllCredentials() : {};
+    console.log(`🔑 Including ${Object.keys(credentials).length} credentials with task`);
+    
+    const taskData = {
+      id: require('crypto').randomUUID(),
+      task: task,
+      credentials: credentials,
+      assignedAt: new Date().toISOString()
+    };
+    
+    const assignedWorkers = [];
+    
+    if (targetWorker === 'all' || !targetWorker) {
+      // Broadcast to all online workers
+      const onlineWorkers = this.workerManager.getOnlineWorkers();
+      for (const worker of onlineWorkers) {
+        if (this.workerManager.assignTask(worker.id, taskData)) {
+          assignedWorkers.push(worker);
         }
       }
-      
-      // Notify admins about task assignment
-      this.broadcastToAdmins({
-        type: 'TASK_ASSIGNED',
-        taskId: taskObj.id,
-        task: taskObj.description,
-        assignedTo: results,
-        timestamp: new Date().toISOString()
-      });
-      
-    } catch (error) {
-      console.error('❌ Task assignment failed:', error);
-      this.broadcastToAdmins({
-        type: 'TASK_ASSIGNMENT_FAILED',
-        error: error.message,
-        timestamp: new Date().toISOString()
-      });
+    } else {
+      // Assign to specific worker
+      if (this.workerManager.assignTask(targetWorker, taskData)) {
+        const worker = this.workerManager.getWorker(targetWorker);
+        if (worker) {
+          assignedWorkers.push(worker);
+        }
+      }
     }
+    
+    // Notify admins about task assignment
+    this.broadcastToAdmins({
+      type: 'TASK_ASSIGNED',
+      task: task,
+      assignedTo: assignedWorkers.map(w => ({ id: w.id, name: w.name })),
+      timestamp: new Date().toISOString()
+    });
+    
+    console.log(`✅ Task assigned to ${assignedWorkers.length} worker(s)`);
   }
 
   handleStatusUpdate(ws, payload) {
@@ -202,14 +210,19 @@ class MessageRouter {
       return;
     }
     
-    // In a real implementation, you'd get credentials from the credential store
-    // For now, send back requested credentials
-    const { requestedKeys } = payload;
+    const { requestedKeys, requestId } = payload;
+    
+    console.log(`🔑 Credential request from ${worker.name}: ${requestedKeys ? requestedKeys.join(', ') : 'all credentials'}`);
+    
+    // Get credentials from credential store
+    const credentials = this.credentialStore ? this.credentialStore.getCredentialsForWorker(requestedKeys) : {};
+    
+    console.log(`🔑 Sending ${Object.keys(credentials).length} credentials to ${worker.name}`);
     
     ws.send(JSON.stringify({
       type: 'CREDENTIAL_RESPONSE',
-      credentials: {}, // Would be populated from credential store
-      requestId: payload.requestId,
+      credentials: credentials,
+      requestId: requestId,
       timestamp: new Date().toISOString()
     }));
   }

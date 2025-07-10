@@ -17,7 +17,7 @@ class AdminServer {
     
     this.workerManager = new WorkerManager();
     this.credentialStore = new CredentialStore();
-    this.messageRouter = new MessageRouter(this.wss, this.workerManager);
+    this.messageRouter = new MessageRouter(this.wss, this.workerManager, this.credentialStore);
     
     this.currentToken = this.generateToken();
     this.tokenExpiry = Date.now() + (10 * 60 * 1000); // 10 minutes
@@ -68,7 +68,12 @@ class AdminServer {
     });
 
     this.app.get('/api/credentials', (req, res) => {
-      res.json(this.credentialStore.getAllCredentials());
+      const credentialsObj = this.credentialStore.getAllCredentials();
+      const credentialsArray = Object.entries(credentialsObj).map(([key, value]) => ({
+        key: key,
+        value: value
+      }));
+      res.json(credentialsArray);
     });
 
     this.app.post('/api/credentials', (req, res) => {

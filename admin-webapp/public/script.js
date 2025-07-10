@@ -4,45 +4,72 @@ class AdminPanel {
         this.workers = new Map();
         this.credentials = new Map();
         this.autoScroll = true;
+        this.currentTheme = 'dark';
+        this.currentLogTab = 'all-logs';
+        this.currentControlTab = 'tasks';
+        this.logCounts = { all: 0, tasks: 0, system: 0 };
         
         this.initializeElements();
         this.bindEvents();
-        this.connect();
         this.loadCredentials();
+        this.connect();
+        this.loadTheme();
+        this.updateStats();
     }
 
     initializeElements() {
         // Connection elements
-        this.connectionIndicator = document.getElementById('connection-indicator');
-        this.currentTokenEl = document.getElementById('current-token');
-        this.tokenExpiryEl = document.getElementById('token-expiry');
+        this.connectionStatus = document.getElementById('connection-status');
+        this.connectionText = document.getElementById('connection-text');
+        this.currentToken = document.getElementById('current-token');
+        this.tokenExpiry = document.getElementById('token-expiry');
         
-        // Workers elements
-        this.workersGrid = document.getElementById('workers-list');
-        this.workerSelect = document.getElementById('worker-select');
+        // Theme toggle
+        this.themeToggle = document.getElementById('theme-toggle');
+        this.themeIcon = document.querySelector('.theme-icon');
         
         // Task elements
         this.taskInput = document.getElementById('task-input');
+        this.workerSelect = document.getElementById('worker-select');
         this.sendTaskBtn = document.getElementById('send-task-btn');
         
-        // Credentials elements
+        // Worker elements
+        this.workerCount = document.getElementById('worker-count');
+        this.workerCountBadge = document.getElementById('worker-count-badge');
+        this.busyCount = document.getElementById('busy-count');
+        this.idleCount = document.getElementById('idle-count');
+        this.workersGrid = document.getElementById('workers-grid');
+        
+        // Credential elements
         this.credKeyInput = document.getElementById('cred-key');
         this.credValueInput = document.getElementById('cred-value');
         this.addCredBtn = document.getElementById('add-cred-btn');
         this.credentialsList = document.getElementById('credentials-list');
         
-        // Logs elements
+        // Log elements
         this.logsContainer = document.getElementById('logs-container');
+        this.tasksContainer = document.getElementById('tasks-container');
+        this.systemContainer = document.getElementById('system-container');
         this.clearLogsBtn = document.getElementById('clear-logs-btn');
         this.autoScrollCheckbox = document.getElementById('auto-scroll');
+        
+        // Log count badges
+        this.allLogsCount = document.getElementById('all-logs-count');
+        this.tasksLogsCount = document.getElementById('tasks-count');
+        this.systemLogsCount = document.getElementById('system-count');
         
         // Templates
         this.workerCardTemplate = document.getElementById('worker-card-template');
         this.credentialItemTemplate = document.getElementById('credential-item-template');
         this.logEntryTemplate = document.getElementById('log-entry-template');
+
+        this.validateTaskInput();
     }
 
     bindEvents() {
+        // Theme toggle
+        this.themeToggle.addEventListener('click', () => this.toggleTheme());
+        
         // Task assignment
         this.sendTaskBtn.addEventListener('click', () => this.sendTask());
         this.taskInput.addEventListener('keydown', (e) => {
@@ -66,8 +93,66 @@ class AdminPanel {
             this.autoScroll = e.target.checked;
         });
         
+        // Tab functionality
+        document.addEventListener('click', (e) => {
+            if (e.target.classList.contains('tab-btn')) {
+                this.switchTab(e.target);
+            }
+        });
+        
         // Input validation
         this.taskInput.addEventListener('input', () => this.validateTaskInput());
+    }
+
+    loadTheme() {
+        const savedTheme = localStorage.getItem('admin-theme') || 'dark';
+        this.setTheme(savedTheme);
+    }
+
+    toggleTheme() {
+        const newTheme = this.currentTheme === 'dark' ? 'light' : 'dark';
+        this.setTheme(newTheme);
+    }
+
+    setTheme(theme) {
+        this.currentTheme = theme;
+        document.body.className = `theme-${theme}`;
+        this.themeIcon.textContent = theme === 'dark' ? '☀️' : '🌙';
+        localStorage.setItem('admin-theme', theme);
+    }
+
+    switchTab(tabBtn) {
+        const tabContainer = tabBtn.closest('.tabs-nav').parentElement;
+        const tabId = tabBtn.dataset.tab;
+        
+        // Check if this is a control tab or monitoring tab
+        const isControlTab = tabContainer.closest('.control-tabs');
+        
+        // Update tab buttons
+        tabContainer.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        tabBtn.classList.add('active');
+        
+        // Update tab content
+        const parentContainer = isControlTab ? 
+            tabContainer.querySelector('.tabs-content') : 
+            tabContainer.querySelector('.tabs-content');
+            
+        parentContainer.querySelectorAll('.tab-pane').forEach(pane => {
+            pane.classList.remove('active');
+        });
+        
+        const targetPane = document.getElementById(`tab-${tabId}`);
+        if (targetPane) {
+            targetPane.classList.add('active');
+            
+            if (isControlTab) {
+                this.currentControlTab = tabId;
+            } else {
+                this.currentLogTab = tabId;
+            }
+        }
     }
 
     connect() {
@@ -134,16 +219,21 @@ class AdminPanel {
                 break;
                 
             case 'ADMIN_CONNECTED':
-                this.updateWorkers(payload.workers);
+                this.log('system', 'success', 'Admin dashboard connected');
                 break;
                 
             case 'WORKERS_LIST':
                 this.updateWorkers(payload.workers);
                 break;
                 
-            case 'WORKER_REGISTERED':
+            case 'WORKER_CONNECTED':
                 this.addWorker(payload.worker);
-                this.log('system', 'success', `Worker registered: ${payload.worker.name}`);
+                this.log('system', 'info', `Worker connected: ${payload.worker.name} (${payload.worker.id})`);
+                break;
+                
+            case 'WORKER_DISCONNECTED':
+                this.removeWorker(payload.workerId);
+                this.log('system', 'warning', `Worker disconnected: ${payload.workerId}`);
                 break;
                 
             case 'WORKER_STATUS_UPDATE':
@@ -151,21 +241,17 @@ class AdminPanel {
                 break;
                 
             case 'TASK_ASSIGNED':
-                this.log('tasks', 'info', `Task assigned: "${payload.task}" to ${payload.assignedTo.length} worker(s)`);
+                this.log('tasks', 'info', `Task assigned to ${payload.workerName}: ${payload.task}`);
                 break;
                 
-            case 'TASK_COMPLETE':
+            case 'TASK_COMPLETED':
                 const status = payload.success ? 'success' : 'error';
-                const result = payload.success ? payload.result : payload.error;
-                this.log('tasks', status, `Task completed by ${payload.workerName}: ${result}`);
+                const result = payload.success ? 'completed successfully' : `failed: ${payload.error}`;
+                this.log('tasks', status, `Task ${result} (${payload.workerName})`);
                 break;
                 
             case 'EXECUTION_LOG':
-                this.log(`worker-${payload.workerName}`, payload.level, payload.log);
-                break;
-                
-            case 'ERROR':
-                this.log('system', 'error', payload.message);
+                this.log('tasks', payload.level || 'info', `[${payload.workerName}] ${payload.message}`);
                 break;
                 
             default:
@@ -176,43 +262,42 @@ class AdminPanel {
     send(message) {
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
             this.ws.send(JSON.stringify(message));
-        } else {
-            this.log('system', 'error', 'Cannot send message: not connected');
         }
     }
 
     updateConnectionStatus(connected) {
-        this.connectionIndicator.textContent = connected ? 'Connected' : 'Disconnected';
-        this.connectionIndicator.className = connected ? 'status-online' : 'status-offline';
-        this.sendTaskBtn.disabled = !connected;
+        this.connectionStatus.className = `status-dot ${connected ? 'online' : 'offline'}`;
+        this.connectionText.textContent = connected ? 'Connected' : 'Disconnected';
     }
 
     updateToken(token, expiresAt) {
-        this.currentTokenEl.textContent = token;
-        
-        if (expiresAt) {
-            const expiryDate = new Date(expiresAt);
-            const now = new Date();
-            const minutesLeft = Math.max(0, Math.floor((expiryDate - now) / 60000));
-            this.tokenExpiryEl.textContent = `(Expires in ${minutesLeft} minutes)`;
-        }
+        this.currentToken.textContent = token;
+        const expiryDate = new Date(expiresAt);
+        this.tokenExpiry.textContent = `Expires: ${expiryDate.toLocaleTimeString()}`;
     }
 
     updateWorkers(workers) {
         this.workers.clear();
-        
         workers.forEach(worker => {
             this.workers.set(worker.id, worker);
         });
-        
         this.renderWorkers();
         this.updateWorkerSelect();
+        this.updateStats();
     }
 
     addWorker(worker) {
         this.workers.set(worker.id, worker);
         this.renderWorkers();
         this.updateWorkerSelect();
+        this.updateStats();
+    }
+
+    removeWorker(workerId) {
+        this.workers.delete(workerId);
+        this.renderWorkers();
+        this.updateWorkerSelect();
+        this.updateStats();
     }
 
     updateWorkerStatus(workerId, status, currentTask) {
@@ -220,75 +305,124 @@ class AdminPanel {
         if (worker) {
             worker.status = status;
             worker.currentTask = currentTask;
+            worker.lastSeen = Date.now();
             this.renderWorkers();
+            this.updateStats();
         }
     }
 
+    updateStats() {
+        const totalWorkers = this.workers.size;
+        const busyWorkers = Array.from(this.workers.values()).filter(w => w.status === 'busy').length;
+        const idleWorkers = totalWorkers - busyWorkers;
+
+        // Update worker counts
+        if (this.workerCount) this.workerCount.textContent = totalWorkers;
+        if (this.workerCountBadge) this.workerCountBadge.textContent = totalWorkers;
+        if (this.busyCount) this.busyCount.textContent = busyWorkers;
+        if (this.idleCount) this.idleCount.textContent = idleWorkers;
+    }
+
     renderWorkers() {
+        if (!this.workersGrid) return;
+
         if (this.workers.size === 0) {
-            this.workersGrid.innerHTML = '<div class="no-workers">No workers connected</div>';
+            this.workersGrid.innerHTML = `
+                <div class="no-workers">
+                    <div class="no-workers-icon">👥</div>
+                    <div class="no-workers-text">No workers connected</div>
+                    <div class="no-workers-hint">Workers will appear here when they connect using the token above</div>
+                </div>
+            `;
             return;
         }
-        
+
         this.workersGrid.innerHTML = '';
         
         this.workers.forEach(worker => {
-            const card = this.workerCardTemplate.content.cloneNode(true);
+            const workerCard = this.workerCardTemplate.content.cloneNode(true);
             
-            card.querySelector('.worker-name').textContent = worker.name;
-            card.querySelector('.worker-status').textContent = worker.status;
-            card.querySelector('.worker-status').className = `worker-status status-${worker.status}`;
-            card.querySelector('.worker-id').textContent = `ID: ${worker.id.slice(0, 8)}`;
-            card.querySelector('.worker-task').textContent = worker.currentTask ? 
-                `Task: ${worker.currentTask.description || 'Running task...'}` : 'No active task';
-            card.querySelector('.worker-last-seen').textContent = worker.lastSeen ? 
-                `Last seen: ${new Date(worker.lastSeen).toLocaleTimeString()}` : '';
+            // Basic info
+            workerCard.querySelector('.worker-name').textContent = worker.name;
+            workerCard.querySelector('.worker-id').textContent = worker.id;
             
-            this.workersGrid.appendChild(card);
+            // Status
+            const statusBadge = workerCard.querySelector('.worker-status-badge');
+            const statusText = workerCard.querySelector('.worker-status-text');
+            statusBadge.className = `worker-status-badge ${worker.status}`;
+            statusText.textContent = worker.status.charAt(0).toUpperCase() + worker.status.slice(1);
+            
+            // Task info
+            const taskValue = workerCard.querySelector('.task-value');
+            taskValue.textContent = worker.currentTask || 'Idle';
+            
+            // Last seen
+            const seenValue = workerCard.querySelector('.seen-value');
+            const lastSeen = worker.lastSeen ? new Date(worker.lastSeen) : new Date();
+            const timeDiff = Date.now() - lastSeen.getTime();
+            const seconds = Math.floor(timeDiff / 1000);
+            const minutes = Math.floor(seconds / 60);
+            const hours = Math.floor(minutes / 60);
+            
+            let timeAgo;
+            if (hours > 0) {
+                timeAgo = `${hours}h ago`;
+            } else if (minutes > 0) {
+                timeAgo = `${minutes}m ago`;
+            } else {
+                timeAgo = 'Just now';
+            }
+            seenValue.textContent = timeAgo;
+            
+            this.workersGrid.appendChild(workerCard);
         });
     }
 
     updateWorkerSelect() {
-        // Keep "All Workers" option and add individual workers
-        this.workerSelect.innerHTML = '<option value="all">All Workers</option>';
+        if (!this.workerSelect) return;
+
+        // Clear existing options except "All Workers"
+        this.workerSelect.innerHTML = '<option value="all">🌐 All Workers</option>';
         
+        // Add worker options
         this.workers.forEach(worker => {
-            if (worker.status === 'online') {
-                const option = document.createElement('option');
-                option.value = worker.id;
-                option.textContent = worker.name;
-                this.workerSelect.appendChild(option);
-            }
+            const option = document.createElement('option');
+            option.value = worker.id;
+            option.textContent = `${worker.name} (${worker.status})`;
+            this.workerSelect.appendChild(option);
         });
     }
 
     validateTaskInput() {
+        if (!this.taskInput || !this.sendTaskBtn) return;
+
         const hasTask = this.taskInput.value.trim().length > 0;
-        const hasConnection = this.ws && this.ws.readyState === WebSocket.OPEN;
-        this.sendTaskBtn.disabled = !hasTask || !hasConnection;
+        const hasWorkers = this.workers.size > 0;
+        
+        this.sendTaskBtn.disabled = !hasTask || !hasWorkers;
     }
 
     sendTask() {
+        if (!this.validateTaskInput()) return;
+
         const task = this.taskInput.value.trim();
-        const selectedWorker = this.workerSelect.value;
-        
+        const targetWorker = this.workerSelect.value;
+
         if (!task) {
-            this.log('system', 'error', 'Task description is required');
+            alert('Please enter a task description');
             return;
         }
-        
-        const message = {
-            type: 'TASK_ASSIGNMENT',
+
+        this.send({
+            type: 'ASSIGN_TASK',
             task: task,
-            targetAll: selectedWorker === 'all',
-            workerId: selectedWorker !== 'all' ? selectedWorker : null
-        };
-        
-        this.send(message);
+            targetWorker: targetWorker === 'all' ? null : targetWorker,
+            credentials: Object.fromEntries(this.credentials)
+        });
+
+        this.log('tasks', 'info', `Task assigned: "${task}" to ${targetWorker === 'all' ? 'all workers' : targetWorker}`);
         this.taskInput.value = '';
         this.validateTaskInput();
-        
-        this.log('system', 'info', `Task sent: "${task}" to ${selectedWorker === 'all' ? 'all workers' : 'selected worker'}`);
     }
 
     async loadCredentials() {
@@ -297,8 +431,8 @@ class AdminPanel {
             const credentials = await response.json();
             
             this.credentials.clear();
-            Object.entries(credentials).forEach(([key, value]) => {
-                this.credentials.set(key, value);
+            credentials.forEach(cred => {
+                this.credentials.set(cred.key, cred.value);
             });
             
             this.renderCredentials();
@@ -310,12 +444,12 @@ class AdminPanel {
     async addCredential() {
         const key = this.credKeyInput.value.trim();
         const value = this.credValueInput.value.trim();
-        
+
         if (!key || !value) {
-            this.log('system', 'error', 'Both credential key and value are required');
+            alert('Please enter both key and value');
             return;
         }
-        
+
         try {
             const response = await fetch('/api/credentials', {
                 method: 'POST',
@@ -324,87 +458,135 @@ class AdminPanel {
                 },
                 body: JSON.stringify({ key, value })
             });
-            
+
             if (response.ok) {
-                this.credentials.set(key.toLowerCase().replace(/\s+/g, '_'), value);
+                this.credentials.set(key, value);
                 this.renderCredentials();
                 this.credKeyInput.value = '';
                 this.credValueInput.value = '';
                 this.log('system', 'success', `Credential added: ${key}`);
             } else {
-                throw new Error('Failed to save credential');
+                throw new Error('Failed to add credential');
             }
         } catch (error) {
             this.log('system', 'error', 'Failed to add credential: ' + error.message);
+            alert('Failed to add credential');
         }
     }
 
     async deleteCredential(key) {
+        if (!confirm(`Delete credential "${key}"?`)) return;
+
         try {
             const response = await fetch(`/api/credentials/${encodeURIComponent(key)}`, {
                 method: 'DELETE'
             });
-            
+
             if (response.ok) {
                 this.credentials.delete(key);
                 this.renderCredentials();
-                this.log('system', 'success', `Credential deleted: ${key}`);
+                this.log('system', 'info', `Credential deleted: ${key}`);
             } else {
                 throw new Error('Failed to delete credential');
             }
         } catch (error) {
             this.log('system', 'error', 'Failed to delete credential: ' + error.message);
+            alert('Failed to delete credential');
         }
     }
 
     renderCredentials() {
-        this.credentialsList.innerHTML = '';
-        
+        if (!this.credentialsList) return;
+
         if (this.credentials.size === 0) {
-            this.credentialsList.innerHTML = '<div style="text-align: center; color: #64748b; padding: 20px;">No credentials stored</div>';
+            this.credentialsList.innerHTML = `
+                <div class="no-credentials">
+                    <div class="no-credentials-icon">🔐</div>
+                    <div class="no-credentials-text">No credentials stored</div>
+                    <div class="no-credentials-hint">Add credentials that workers can use for authentication</div>
+                </div>
+            `;
             return;
         }
+
+        this.credentialsList.innerHTML = '';
         
         this.credentials.forEach((value, key) => {
-            const item = this.credentialItemTemplate.content.cloneNode(true);
+            const credentialItem = this.credentialItemTemplate.content.cloneNode(true);
             
-            item.querySelector('.credential-key').textContent = key;
+            credentialItem.querySelector('.credential-key').textContent = key;
+            credentialItem.querySelector('.credential-value').textContent = '••••••••';
             
-            // Mask passwords for display
-            const displayValue = key.includes('password') ? '*'.repeat(value.length) : value;
-            item.querySelector('.credential-value').textContent = displayValue;
-            
-            const deleteBtn = item.querySelector('.delete-btn');
+            const deleteBtn = credentialItem.querySelector('.delete-btn');
             deleteBtn.addEventListener('click', () => this.deleteCredential(key));
             
-            this.credentialsList.appendChild(item);
+            this.credentialsList.appendChild(credentialItem);
         });
     }
 
     log(source, level, message) {
-        const entry = this.logEntryTemplate.content.cloneNode(true);
+        const timestamp = new Date().toLocaleTimeString();
         
-        entry.querySelector('.log-timestamp').textContent = new Date().toLocaleTimeString();
-        entry.querySelector('.log-source').textContent = source;
-        entry.querySelector('.log-level').textContent = level;
-        entry.querySelector('.log-level').className = `log-level ${level}`;
-        entry.querySelector('.log-message').textContent = message;
+        // Update log counts
+        this.logCounts.all++;
+        if (source === 'tasks') this.logCounts.tasks++;
+        if (source === 'system') this.logCounts.system++;
         
-        this.logsContainer.appendChild(entry);
+        // Update count badges
+        if (this.allLogsCount) this.allLogsCount.textContent = this.logCounts.all;
+        if (this.tasksLogsCount) this.tasksLogsCount.textContent = this.logCounts.tasks;
+        if (this.systemLogsCount) this.systemLogsCount.textContent = this.logCounts.system;
+
+        const logEntry = this.logEntryTemplate.content.cloneNode(true);
         
-        // Auto-scroll to bottom if enabled
-        if (this.autoScroll) {
-            this.logsContainer.scrollTop = this.logsContainer.scrollHeight;
+        logEntry.querySelector('.log-timestamp').textContent = timestamp;
+        logEntry.querySelector('.log-source').textContent = source.toUpperCase();
+        logEntry.querySelector('.log-level').textContent = level;
+        logEntry.querySelector('.log-level').className = `log-level ${level}`;
+        logEntry.querySelector('.log-message').textContent = message;
+
+        // Add to appropriate containers
+        if (this.logsContainer) {
+            this.logsContainer.appendChild(logEntry.cloneNode(true));
         }
-        
-        // Limit log entries to prevent memory issues
-        while (this.logsContainer.children.length > 500) {
-            this.logsContainer.removeChild(this.logsContainer.firstChild);
+
+        if (source === 'tasks' && this.tasksContainer) {
+            this.tasksContainer.appendChild(logEntry.cloneNode(true));
+        }
+
+        if (source === 'system' && this.systemContainer) {
+            this.systemContainer.appendChild(logEntry.cloneNode(true));
+        }
+
+        // Auto-scroll if enabled
+        if (this.autoScroll) {
+            const activeContainer = this.getActiveLogContainer();
+            if (activeContainer) {
+                activeContainer.scrollTop = activeContainer.scrollHeight;
+            }
+        }
+    }
+
+    getActiveLogContainer() {
+        switch (this.currentLogTab) {
+            case 'all-logs': return this.logsContainer;
+            case 'tasks': return this.tasksContainer;
+            case 'system': return this.systemContainer;
+            default: return this.logsContainer;
         }
     }
 
     clearLogs() {
-        this.logsContainer.innerHTML = '';
+        if (this.logsContainer) this.logsContainer.innerHTML = '';
+        if (this.tasksContainer) this.tasksContainer.innerHTML = '';
+        if (this.systemContainer) this.systemContainer.innerHTML = '';
+        
+        // Reset counts
+        this.logCounts = { all: 0, tasks: 0, system: 0 };
+        if (this.allLogsCount) this.allLogsCount.textContent = '0';
+        if (this.tasksLogsCount) this.tasksLogsCount.textContent = '0';
+        if (this.systemLogsCount) this.systemLogsCount.textContent = '0';
+        
         this.log('system', 'info', 'Logs cleared');
     }
 }

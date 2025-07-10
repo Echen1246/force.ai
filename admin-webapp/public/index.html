@@ -3,75 +3,187 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Browser Use Admin Panel</title>
+    <title>Browser Use Orchestration Platform</title>
     <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
 </head>
-<body>
-    <div class="container">
-        <header>
-            <h1>🤖 Browser Use Orchestration Panel</h1>
-            <div class="connection-status">
-                <div id="connection-indicator" class="status-offline">Disconnected</div>
-                <div class="token-display">
-                    Worker Token: <span id="current-token">-</span>
-                    <span id="token-expiry" class="token-expiry"></span>
+<body class="theme-dark">
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-left">
+                <h1>🤖 Browser Use Orchestration Platform</h1>
+                <div class="connection-indicator">
+                    <div id="connection-status" class="status-dot offline"></div>
+                    <span id="connection-text">Disconnected</span>
                 </div>
+            </div>
+            <div class="header-right">
+                <div class="token-info">
+                    <label>Worker Token:</label>
+                    <code id="current-token">-</code>
+                    <span id="token-expiry" class="expiry-time"></span>
+                </div>
+                <button id="theme-toggle" class="theme-toggle" title="Toggle theme">
+                    <span class="theme-icon">🌙</span>
+                </button>
             </div>
         </header>
 
-        <div class="main-content">
-            <!-- Workers Section -->
-            <section class="panel">
-                <h2>📊 Connected Workers</h2>
-                <div id="workers-list" class="workers-grid">
-                    <div class="no-workers">No workers connected</div>
-                </div>
-            </section>
-
-            <!-- Task Assignment Section -->
-            <section class="panel">
-                <h2>📝 Task Assignment</h2>
-                <div class="task-form">
-                    <div class="form-group">
-                        <label for="task-input">Task Description:</label>
-                        <textarea id="task-input" placeholder="Enter task in natural language (e.g., 'Login to Gmail and check for new emails')"></textarea>
+        <div class="app-main">
+            <!-- Left Panel - Unified Control Center -->
+            <div class="left-panel">
+                <section class="control-center">
+                    <div class="control-center-header">
+                        <h2>🎛️ Control Center</h2>
                     </div>
                     
-                    <div class="form-group">
-                        <label for="worker-select">Target Worker:</label>
-                        <select id="worker-select">
-                            <option value="all">All Workers</option>
-                        </select>
-                    </div>
-                    
-                    <button id="send-task-btn" class="btn-primary" disabled>Send Task</button>
-                </div>
-            </section>
+                    <!-- Tab Navigation -->
+                    <div class="control-tabs">
+                        <div class="tabs-nav">
+                            <button class="tab-btn active" data-tab="tasks">
+                                <span class="tab-icon">📋</span>
+                                <span class="tab-label">Tasks</span>
+                            </button>
+                            <button class="tab-btn" data-tab="workers">
+                                <span class="tab-icon">👥</span>
+                                <span class="tab-label">Workers</span>
+                                <span id="worker-count-badge" class="count-badge">0</span>
+                            </button>
+                            <button class="tab-btn" data-tab="credentials">
+                                <span class="tab-icon">🔐</span>
+                                <span class="tab-label">Credentials</span>
+                            </button>
+                        </div>
+                        
+                        <!-- Tab Content -->
+                        <div class="tabs-content">
+                            <!-- Tasks Tab -->
+                            <div id="tab-tasks" class="tab-pane active">
+                                <div class="tasks-content">
+                                    <div class="form-group">
+                                        <label for="task-input">Natural Language Task:</label>
+                                        <textarea id="task-input" placeholder="Describe what you want the browser to do...&#10;&#10;Examples:&#10;• Go to Gmail and check for new emails&#10;• Login to LinkedIn and update my status&#10;• Search for 'AI automation tools' on Google"></textarea>
+                                    </div>
+                                    
+                                    <div class="form-row">
+                                        <div class="form-group flex-1">
+                                            <label for="worker-select">Target Worker:</label>
+                                            <select id="worker-select">
+                                                <option value="all">🌐 All Workers</option>
+                                            </select>
+                                        </div>
+                                        <button id="send-task-btn" class="btn-primary" disabled>
+                                            <span>Send Task</span>
+                                            <span class="shortcut">Ctrl+Enter</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
 
-            <!-- Credentials Section -->
-            <section class="panel">
-                <h2>🔐 Credential Store</h2>
-                <div class="credentials-section">
-                    <div class="add-credential">
-                        <input type="text" id="cred-key" placeholder="Credential key (e.g., 'google username')">
-                        <input type="text" id="cred-value" placeholder="Credential value">
-                        <button id="add-cred-btn" class="btn-secondary">Add/Update</button>
-                    </div>
-                    <div id="credentials-list" class="credentials-grid"></div>
-                </div>
-            </section>
+                            <!-- Workers Tab -->
+                            <div id="tab-workers" class="tab-pane">
+                                <div class="workers-content">
+                                    <div class="workers-header">
+                                        <div class="workers-stats">
+                                            <div class="stat-item">
+                                                <span class="stat-value" id="worker-count">0</span>
+                                                <span class="stat-label">Active</span>
+                                            </div>
+                                            <div class="stat-item">
+                                                <span class="stat-value" id="busy-count">0</span>
+                                                <span class="stat-label">Busy</span>
+                                            </div>
+                                            <div class="stat-item">
+                                                <span class="stat-value" id="idle-count">0</span>
+                                                <span class="stat-label">Idle</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div id="workers-grid" class="workers-grid">
+                                        <div class="no-workers">
+                                            <div class="no-workers-icon">👥</div>
+                                            <div class="no-workers-text">No workers connected</div>
+                                            <div class="no-workers-hint">Workers will appear here when they connect using the token above</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
 
-            <!-- Logs Section -->
-            <section class="panel logs-panel">
-                <h2>📋 Execution Logs</h2>
-                <div class="logs-controls">
-                    <button id="clear-logs-btn" class="btn-secondary">Clear Logs</button>
-                    <label>
-                        <input type="checkbox" id="auto-scroll" checked> Auto-scroll
-                    </label>
-                </div>
-                <div id="logs-container" class="logs-container"></div>
-            </section>
+                            <!-- Credentials Tab -->
+                            <div id="tab-credentials" class="tab-pane">
+                                <div class="credentials-content">
+                                    <div class="add-credential-form">
+                                        <div class="form-row">
+                                            <input type="text" id="cred-key" placeholder="Key (e.g., 'gmail_username')" class="flex-1">
+                                            <input type="password" id="cred-value" placeholder="Value" class="flex-1">
+                                            <button id="add-cred-btn" class="btn-secondary">
+                                                <span>+</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div id="credentials-list" class="credentials-list">
+                                        <div class="no-credentials">
+                                            <div class="no-credentials-icon">🔐</div>
+                                            <div class="no-credentials-text">No credentials stored</div>
+                                            <div class="no-credentials-hint">Add credentials that workers can use for authentication</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Right Panel - Monitoring Dashboard -->
+            <div class="right-panel">
+                <section class="monitoring-dashboard">
+                    <div class="monitoring-header">
+                        <h2>📊 Real-time Monitoring</h2>
+                        <div class="monitoring-controls">
+                            <button id="clear-logs-btn" class="btn-secondary small">
+                                <span>🗑️</span>
+                                <span>Clear</span>
+                            </button>
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="auto-scroll" checked>
+                                <span class="checkmark"></span>
+                                <span>Auto-scroll</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="monitoring-tabs">
+                        <div class="tabs-nav">
+                            <button class="tab-btn active" data-tab="all-logs">
+                                <span>All Logs</span>
+                                <span id="all-logs-count" class="count-badge">0</span>
+                            </button>
+                            <button class="tab-btn" data-tab="tasks">
+                                <span>Tasks</span>
+                                <span id="tasks-count" class="count-badge">0</span>
+                            </button>
+                            <button class="tab-btn" data-tab="system">
+                                <span>System</span>
+                                <span id="system-count" class="count-badge">0</span>
+                            </button>
+                        </div>
+                        
+                        <div class="tabs-content">
+                            <div id="tab-all-logs" class="tab-pane active">
+                                <div id="logs-container" class="logs-container"></div>
+                            </div>
+                            <div id="tab-tasks" class="tab-pane">
+                                <div id="tasks-container" class="logs-container"></div>
+                            </div>
+                            <div id="tab-system" class="tab-pane">
+                                <div id="system-container" class="logs-container"></div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
         </div>
     </div>
 
@@ -79,31 +191,51 @@
     <template id="worker-card-template">
         <div class="worker-card">
             <div class="worker-header">
-                <h3 class="worker-name"></h3>
-                <div class="worker-status"></div>
+                <div class="worker-info">
+                    <h3 class="worker-name"></h3>
+                    <div class="worker-id"></div>
+                </div>
+                <div class="worker-status">
+                    <div class="worker-status-badge"></div>
+                    <span class="worker-status-text"></span>
+                </div>
             </div>
-            <div class="worker-info">
-                <div class="worker-id"></div>
-                <div class="worker-task"></div>
-                <div class="worker-last-seen"></div>
+            <div class="worker-details">
+                <div class="worker-task">
+                    <span class="task-label">Current Task:</span>
+                    <span class="task-value">Idle</span>
+                </div>
+                <div class="worker-last-seen">
+                    <span class="seen-label">Last Seen:</span>
+                    <span class="seen-value">Just now</span>
+                </div>
             </div>
+            <div class="worker-capabilities"></div>
         </div>
     </template>
 
     <template id="credential-item-template">
         <div class="credential-item">
-            <div class="credential-key"></div>
-            <div class="credential-value"></div>
-            <button class="delete-btn">×</button>
+            <div class="credential-info">
+                <div class="credential-key"></div>
+                <div class="credential-value"></div>
+            </div>
+            <button class="delete-btn" title="Delete credential">
+                <span>×</span>
+            </button>
         </div>
     </template>
 
     <template id="log-entry-template">
         <div class="log-entry">
-            <span class="log-timestamp"></span>
-            <span class="log-source"></span>
-            <span class="log-level"></span>
-            <span class="log-message"></span>
+            <div class="log-meta">
+                <span class="log-timestamp"></span>
+                <span class="log-source"></span>
+            </div>
+            <div class="log-content">
+                <span class="log-level"></span>
+                <span class="log-message"></span>
+            </div>
         </div>
     </template>
 

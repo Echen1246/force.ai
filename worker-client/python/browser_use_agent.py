@@ -89,6 +89,79 @@ class BrowserUseAgent:
             self.log("error", f"Failed to format credentials: {str(e)}")
             return ""
 
+    def format_result(self, result) -> str:
+        """Format Browser Use result into readable output."""
+        try:
+            if result is None:
+                return "Task completed successfully (no specific result returned)"
+            
+            # If result is a string, return it as-is
+            if isinstance(result, str):
+                return result.strip()
+            
+            # If result has a text or message attribute
+            if hasattr(result, 'text') and result.text:
+                return result.text.strip()
+            if hasattr(result, 'message') and result.message:
+                return result.message.strip()
+            
+            # If result is a dict-like object
+            if hasattr(result, '__dict__'):
+                result_dict = result.__dict__
+                
+                # Look for common Browser Use result fields
+                if 'text' in result_dict and result_dict['text']:
+                    return result_dict['text'].strip()
+                if 'content' in result_dict and result_dict['content']:
+                    return result_dict['content'].strip()
+                if 'result' in result_dict and result_dict['result']:
+                    return str(result_dict['result']).strip()
+            
+            # If result is a list, format as numbered list
+            if isinstance(result, list):
+                if len(result) == 0:
+                    return "Task completed - no items found"
+                elif len(result) == 1:
+                    return f"Found: {str(result[0]).strip()}"
+                else:
+                    formatted_items = []
+                    for i, item in enumerate(result[:10], 1):  # Limit to first 10 items
+                        formatted_items.append(f"{i}. {str(item).strip()}")
+                    result_text = "Found the following:\n" + "\n".join(formatted_items)
+                    if len(result) > 10:
+                        result_text += f"\n... and {len(result) - 10} more items"
+                    return result_text
+            
+            # If result is a dict, format key-value pairs
+            if isinstance(result, dict):
+                if len(result) == 0:
+                    return "Task completed - no data found"
+                
+                formatted_pairs = []
+                for key, value in list(result.items())[:10]:  # Limit to first 10 pairs
+                    formatted_pairs.append(f"• {key}: {str(value).strip()}")
+                result_text = "Found the following information:\n" + "\n".join(formatted_pairs)
+                if len(result) > 10:
+                    result_text += f"\n... and {len(result) - 10} more items"
+                return result_text
+            
+            # For any other type, convert to string but clean it up
+            result_str = str(result).strip()
+            
+            # Remove common unwanted patterns
+            if result_str.startswith("Agent(") and result_str.endswith(")"):
+                return "Task completed successfully"
+            
+            # If it's too long, truncate it
+            if len(result_str) > 500:
+                result_str = result_str[:500] + "... (truncated)"
+            
+            return result_str if result_str else "Task completed successfully"
+            
+        except Exception as e:
+            self.log("error", f"Failed to format result: {str(e)}")
+            return f"Task completed, but result formatting failed: {str(result)[:200]}"
+
     async def execute_task(self, task: str, credentials: Dict[str, str] = None) -> str:
         """Execute a browser automation task using Browser Use."""
         try:
@@ -98,6 +171,7 @@ class BrowserUseAgent:
             if credentials:
                 credential_context = self.format_credentials(credentials)
                 task_with_credentials = f"{task}\n\nAvailable credentials:\n{credential_context}"
+                self.log("info", f"Using {len(credentials)} credentials for task")
             else:
                 task_with_credentials = task
             
@@ -109,11 +183,11 @@ class BrowserUseAgent:
             # Execute the task
             result = await agent.run()
             
-            # Process result
-            result_text = f"Task completed successfully. Result: {str(result)}"
+            # Format the result properly
+            formatted_result = self.format_result(result)
             
-            self.log("info", f"Task execution completed: {result_text}")
-            return result_text
+            self.log("info", f"Task execution completed successfully")
+            return formatted_result
             
         except Exception as e:
             error_msg = f"Task execution failed: {str(e)}"

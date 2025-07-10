@@ -8,6 +8,44 @@ class WorkerManager {
     this.connections = new Map(); // WebSocket -> workerId
     this.dataFile = path.join(__dirname, '../data/workers.json');
     this.loadWorkers();
+    
+    // Auto-cleanup inactive workers every hour
+    this.setupAutoCleanup();
+  }
+
+  setupAutoCleanup() {
+    // Clean up workers that haven't been seen for over 24 hours
+    const CLEANUP_INTERVAL = 60 * 60 * 1000; // 1 hour
+    const INACTIVE_THRESHOLD = 24 * 60 * 60 * 1000; // 24 hours
+    
+    setInterval(() => {
+      this.cleanupInactiveWorkers(INACTIVE_THRESHOLD);
+    }, CLEANUP_INTERVAL);
+    
+    console.log('🧹 Auto-cleanup enabled: removing workers inactive for >24 hours');
+  }
+
+  cleanupInactiveWorkers(thresholdMs) {
+    const now = Date.now();
+    let cleanupCount = 0;
+    
+    for (const [workerId, worker] of this.workers.entries()) {
+      if (worker.status === 'offline' && worker.lastSeen) {
+        const lastSeenTime = new Date(worker.lastSeen).getTime();
+        const timeSinceLastSeen = now - lastSeenTime;
+        
+        if (timeSinceLastSeen > thresholdMs) {
+          console.log(`🧹 Cleaning up inactive worker: ${worker.name} (last seen ${Math.round(timeSinceLastSeen / (60 * 60 * 1000))} hours ago)`);
+          this.workers.delete(workerId);
+          cleanupCount++;
+        }
+      }
+    }
+    
+    if (cleanupCount > 0) {
+      this.saveWorkers();
+      console.log(`🧹 Cleaned up ${cleanupCount} inactive workers`);
+    }
   }
 
   loadWorkers() {
@@ -99,21 +137,31 @@ class WorkerManager {
   getConnectedWorkers() {
     const workers = [];
     for (const [id, worker] of this.workers.entries()) {
-      workers.push({
-        id: worker.id,
-        name: worker.name,
-        status: worker.status,
-        capabilities: worker.capabilities,
-        registeredAt: worker.registeredAt,
-        lastSeen: worker.lastSeen,
-        currentTask: worker.currentTask
-      });
+      // Only return workers that are either online or have been seen recently (within 24 hours)
+      const isRecentlyActive = worker.lastSeen && 
+        (Date.now() - new Date(worker.lastSeen).getTime()) < (24 * 60 * 60 * 1000);
+      
+      if (worker.status === 'online' || isRecentlyActive) {
+        workers.push({
+          id: worker.id,
+          name: worker.name,
+          status: worker.status,
+          capabilities: worker.capabilities,
+          registeredAt: worker.registeredAt,
+          lastSeen: worker.lastSeen,
+          currentTask: worker.currentTask
+        });
+      }
     }
     return workers;
   }
 
   getOnlineWorkers() {
     return Array.from(this.workers.values()).filter(worker => worker.status === 'online');
+  }
+
+  getWorker(workerId) {
+    return this.workers.get(workerId);
   }
 
   updateWorkerStatus(workerId, status, currentTask = null) {
@@ -141,7 +189,7 @@ class WorkerManager {
         worker.connection.send(JSON.stringify({
           type: 'TASK_ASSIGNMENT',
           taskId: task.id,
-          task: task.description,
+          task: task.task, // Changed from task.description to task.task
           credentials: task.credentials || {}
         }));
         return true;

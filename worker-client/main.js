@@ -15,7 +15,7 @@ class WorkerApp {
     
     // Worker state
     this.workerConfig = {
-      adminUrl: 'ws://localhost:3000',
+      adminUrl: process.env.ADMIN_URL || 'wss://cautious-jail-production.up.railway.app',
       workerName: '',
       adminToken: '',
       workerId: null
@@ -308,12 +308,18 @@ class WorkerApp {
         throw new Error('Browser Use manager not available');
       }
 
+      // Set task execution status for smart heartbeat
+      if (this.adminConnection) {
+        this.adminConnection.setTaskExecutionStatus(true);
+      }
+
       // Execute the task
       const result = await this.browserUseManager.executeTask(task);
       
       // Report completion to admin
       if (this.adminConnection) {
         this.adminConnection.sendTaskComplete(task.taskId, true, result);
+        this.adminConnection.setTaskExecutionStatus(false);
       }
       
       this.updateWorkerStatus({ 
@@ -327,6 +333,7 @@ class WorkerApp {
       // Report error to admin
       if (this.adminConnection) {
         this.adminConnection.sendTaskComplete(task.taskId, false, null, error.message);
+        this.adminConnection.setTaskExecutionStatus(false);
       }
       
       this.updateWorkerStatus({ 
