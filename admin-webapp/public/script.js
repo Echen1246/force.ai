@@ -226,9 +226,9 @@ class AdminPanel {
                 this.updateWorkers(payload.workers);
                 break;
                 
-            case 'WORKER_CONNECTED':
+            case 'WORKER_REGISTERED':
                 this.addWorker(payload.worker);
-                this.log('system', 'info', `Worker connected: ${payload.worker.name} (${payload.worker.id})`);
+                this.log('system', 'info', `Worker registered: ${payload.worker.name} (${payload.worker.id})`);
                 break;
                 
             case 'WORKER_DISCONNECTED':
@@ -394,12 +394,13 @@ class AdminPanel {
     }
 
     validateTaskInput() {
-        if (!this.taskInput || !this.sendTaskBtn) return;
+        if (!this.taskInput || !this.sendTaskBtn) return false;
 
         const hasTask = this.taskInput.value.trim().length > 0;
         const hasWorkers = this.workers.size > 0;
         
         this.sendTaskBtn.disabled = !hasTask || !hasWorkers;
+        return hasTask && hasWorkers;
     }
 
     sendTask() {
@@ -414,7 +415,7 @@ class AdminPanel {
         }
 
         this.send({
-            type: 'ASSIGN_TASK',
+            type: 'TASK_ASSIGNMENT',
             task: task,
             targetWorker: targetWorker === 'all' ? null : targetWorker,
             credentials: Object.fromEntries(this.credentials)
