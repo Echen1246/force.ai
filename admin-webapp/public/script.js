@@ -52,6 +52,7 @@ class AdminPanel {
         this.systemContainer = document.getElementById('system-container');
         this.clearLogsBtn = document.getElementById('clear-logs-btn');
         this.autoScrollCheckbox = document.getElementById('auto-scroll');
+        this.workerFilter = document.getElementById('worker-filter');
         
         // Log count badges
         this.allLogsCount = document.getElementById('all-logs-count');
@@ -92,6 +93,7 @@ class AdminPanel {
         this.autoScrollCheckbox.addEventListener('change', (e) => {
             this.autoScroll = e.target.checked;
         });
+        this.workerFilter.addEventListener('change', () => this.filterLogs());
         
         // Tab functionality
         document.addEventListener('click', (e) => {
@@ -241,17 +243,17 @@ class AdminPanel {
                 break;
                 
             case 'TASK_ASSIGNED':
-                this.log('tasks', 'info', `Task assigned to ${payload.workerName}: ${payload.task}`);
+                this.log('tasks', 'info', `Task assigned: ${payload.task}`, payload.workerId);
                 break;
                 
             case 'TASK_COMPLETED':
                 const status = payload.success ? 'success' : 'error';
                 const result = payload.success ? 'completed successfully' : `failed: ${payload.error}`;
-                this.log('tasks', status, `Task ${result} (${payload.workerName})`);
+                this.log('tasks', status, `Task ${result} (${payload.workerName})`, payload.workerId);
                 break;
                 
             case 'EXECUTION_LOG':
-                this.log('tasks', payload.level || 'info', `[${payload.workerName}] ${payload.message}`);
+                this.log('tasks', payload.level || 'info', `[${payload.workerName}] ${payload.message}`, payload.workerId);
                 break;
                 
             default:
@@ -391,6 +393,24 @@ class AdminPanel {
             option.textContent = `${worker.name} (${worker.status})`;
             this.workerSelect.appendChild(option);
         });
+        
+        // Update worker filter dropdown
+        this.updateWorkerFilter();
+    }
+
+    updateWorkerFilter() {
+        if (!this.workerFilter) return;
+
+        // Clear existing options except "All Workers"
+        this.workerFilter.innerHTML = '<option value="all">🌐 All Workers</option>';
+        
+        // Add worker options
+        this.workers.forEach(worker => {
+            const option = document.createElement('option');
+            option.value = worker.id;
+            option.textContent = `${worker.name}`;
+            this.workerFilter.appendChild(option);
+        });
     }
 
     validateTaskInput() {
@@ -525,7 +545,22 @@ class AdminPanel {
         });
     }
 
-    log(source, level, message) {
+    log(source, level, message, workerId = null) {
+        // Filter out verbose logs - only show important API outputs
+        const importantKeywords = [
+            'Task assigned', 'Task completed', 'Task failed', 'TASK_RESULT:', 'FATAL_ERROR:',
+            'Worker registered', 'Worker disconnected', 'Credential', 'API', 'Connected', 'error'
+        ];
+        
+        const isImportant = importantKeywords.some(keyword => 
+            message.toLowerCase().includes(keyword.toLowerCase())
+        );
+        
+        if (!isImportant && source !== 'system') {
+            // Skip verbose logs that aren't important
+            return;
+        }
+        
         const timestamp = new Date().toLocaleTimeString();
         
         // Update log counts
@@ -539,6 +574,13 @@ class AdminPanel {
         if (this.systemLogsCount) this.systemLogsCount.textContent = this.logCounts.system;
 
         const logEntry = this.logEntryTemplate.content.cloneNode(true);
+        const logElement = logEntry.querySelector('.log-entry');
+        
+        // Add worker data for filtering
+        if (workerId) {
+            logElement.dataset.workerId = workerId;
+        }
+        logElement.dataset.source = source;
         
         logEntry.querySelector('.log-timestamp').textContent = timestamp;
         logEntry.querySelector('.log-source').textContent = source.toUpperCase();
@@ -559,6 +601,9 @@ class AdminPanel {
             this.systemContainer.appendChild(logEntry.cloneNode(true));
         }
 
+        // Apply current filter
+        this.filterLogs();
+
         // Auto-scroll if enabled
         if (this.autoScroll) {
             const activeContainer = this.getActiveLogContainer();
@@ -566,6 +611,24 @@ class AdminPanel {
                 activeContainer.scrollTop = activeContainer.scrollHeight;
             }
         }
+    }
+
+    filterLogs() {
+        if (!this.workerFilter) return;
+        
+        const selectedWorker = this.workerFilter.value;
+        const containers = [this.logsContainer, this.tasksContainer, this.systemContainer];
+        
+        containers.forEach(container => {
+            if (!container) return;
+            
+            const logEntries = container.querySelectorAll('.log-entry');
+            logEntries.forEach(entry => {
+                const entryWorkerId = entry.dataset.workerId;
+                const shouldShow = selectedWorker === 'all' || entryWorkerId === selectedWorker || !entryWorkerId;
+                entry.style.display = shouldShow ? 'block' : 'none';
+            });
+        });
     }
 
     getActiveLogContainer() {

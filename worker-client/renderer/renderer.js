@@ -210,9 +210,23 @@ class WorkerRenderer {
     }
   }
 
-  toggleSettings() {
+  async toggleSettings() {
     const isHidden = this.settingsPanel.style.display === 'none';
     this.settingsPanel.style.display = isHidden ? 'block' : 'none';
+    
+    // Auto-resize window based on settings panel visibility
+    const normalHeight = 120;
+    const expandedHeight = 300;
+    const width = 400;
+    
+    try {
+      await window.electronAPI.resizeWindow({
+        width: width,
+        height: isHidden ? expandedHeight : normalHeight
+      });
+    } catch (error) {
+      console.error('Failed to resize window:', error);
+    }
     
     if (isHidden) {
       this.showSettings();
@@ -254,6 +268,17 @@ class WorkerRenderer {
     localStorage.setItem('workerConfig', JSON.stringify(this.workerConfig));
     
     this.settingsPanel.style.display = 'none';
+    
+    // Resize window back to normal size
+    try {
+      await window.electronAPI.resizeWindow({
+        width: 400,
+        height: 120
+      });
+    } catch (error) {
+      console.error('Failed to resize window:', error);
+    }
+    
     this.showMessage('Settings saved', 'success');
     
     // Auto-connect if not connected
@@ -262,8 +287,18 @@ class WorkerRenderer {
     }
   }
 
-  cancelSettings() {
+  async cancelSettings() {
     this.settingsPanel.style.display = 'none';
+    
+    // Resize window back to normal size
+    try {
+      await window.electronAPI.resizeWindow({
+        width: 400,
+        height: 120
+      });
+    } catch (error) {
+      console.error('Failed to resize window:', error);
+    }
   }
 
   loadSavedSettings() {

@@ -219,6 +219,14 @@ class WorkerApp {
     ipcMain.handle('open-external', (event, url) => {
       shell.openExternal(url);
     });
+
+    // Handle window resize requests
+    ipcMain.handle('resize-window', (event, { width, height }) => {
+      if (this.mainWindow) {
+        this.mainWindow.setSize(width, height);
+        this.mainWindow.center();
+      }
+    });
   }
 
   initializeWorkerModules() {

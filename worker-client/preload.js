@@ -14,6 +14,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // External links
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
   
+  // Window management
+  resizeWindow: (dimensions) => ipcRenderer.invoke('resize-window', dimensions),
+  
   // Event listeners for main process communications
   on: (channel, callback) => {
     const validChannels = [

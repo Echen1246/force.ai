@@ -695,6 +695,17 @@ textarea {
   gap: 16px;
 }
 
+.worker-filter {
+  min-width: 150px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
 .checkbox-label {
   display: flex;
   align-items: center;
