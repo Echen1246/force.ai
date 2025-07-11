@@ -57,6 +57,134 @@ class BrowserUseManager extends EventEmitter {
     }
   }
 
+  classifyTask(task) {
+    /**
+     * Classify task to determine if it needs browser automation or can use direct AI
+     */
+    const taskLower = task.toLowerCase();
+    
+    // Tasks that definitely need browser automation
+    const webActionKeywords = [
+      'click', 'fill', 'form', 'login', 'navigate', 'screenshot', 'scroll',
+      'download', 'upload', 'button', 'link', 'menu', 'select', 'type',
+      'submit', 'sign in', 'sign up', 'enter', 'input', 'website', 'page',
+      'browser', 'open', 'close', 'tab', 'window'
+    ];
+    
+    // Tasks that can be done via direct AI
+    const researchKeywords = [
+      'research', 'analyze', 'summarize', 'compare', 'evaluate', 'find information',
+      'tell me about', 'what is', 'explain', 'describe', 'overview', 'report',
+      'equity research', 'financial analysis', 'company analysis', 'market research',
+      'study', 'investigate', 'examine', 'review', 'assess', 'calculate'
+    ];
+    
+    // Check for web actions first (higher priority)
+    if (webActionKeywords.some(keyword => taskLower.includes(keyword))) {
+      return 'BROWSER_ACTION';
+    }
+    
+    // Check for research tasks
+    if (researchKeywords.some(keyword => taskLower.includes(keyword))) {
+      return 'AI_RESEARCH';
+    }
+    
+    // Default to browser action for safety
+    return 'BROWSER_ACTION';
+  }
+
+  async executeAIResearch(task, credentials = {}) {
+    /**
+     * Execute research task using direct OpenAI API
+     */
+    try {
+      this.emit('log', `🧠 Executing AI research: ${task}`);
+      
+      if (!this.apiKey) {
+        throw new Error('No OpenAI API key configured for AI research');
+      }
+
+      // Import OpenAI dynamically
+      let openai;
+      try {
+        const { Configuration, OpenAIApi } = require('openai');
+        const configuration = new Configuration({
+          apiKey: this.apiKey,
+        });
+        openai = new OpenAIApi(configuration);
+      } catch (importError) {
+        // Fallback to newer OpenAI SDK
+        try {
+          const OpenAI = require('openai');
+          openai = new OpenAI({
+            apiKey: this.apiKey,
+          });
+        } catch (fallbackError) {
+          throw new Error('OpenAI package not installed. Run: npm install openai');
+        }
+      }
+
+      // Enhanced research prompt
+      const systemPrompt = "You are a professional research assistant. Provide comprehensive, accurate, and well-structured information.";
+      
+      const userPrompt = `
+Please provide detailed research on the following request:
+
+${task}
+
+Structure your response with:
+1. **Executive Summary**
+2. **Key Findings**
+3. **Detailed Analysis**
+4. **Important Considerations**
+5. **Conclusion**
+
+${credentials && Object.keys(credentials).length > 0 ? 
+  `\nAvailable context/credentials: ${Object.keys(credentials).join(', ')}` : 
+  ''
+}
+
+Be thorough, factual, and actionable.
+`;
+
+      this.emit('log', 'Calling OpenAI API...');
+      
+      let response;
+      try {
+        // Try new OpenAI SDK format first
+        response = await openai.chat.completions.create({
+          model: this.model,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt }
+          ],
+          max_tokens: 2500,
+          temperature: 0.7
+        });
+        
+        return response.choices[0].message.content.trim();
+        
+      } catch (newSDKError) {
+        // Fallback to old SDK format
+        response = await openai.createChatCompletion({
+          model: this.model,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt }
+          ],
+          max_tokens: 2500,
+          temperature: 0.7
+        });
+        
+        return response.data.choices[0].message.content.trim();
+      }
+      
+    } catch (error) {
+      this.emit('log', `❌ AI research failed: ${error.message}`, 'error');
+      throw error;
+    }
+  }
+
   async initialize() {
     if (this.isReady) return;
 
@@ -149,22 +277,36 @@ class BrowserUseManager extends EventEmitter {
 
     this.currentTask = task;
     this.emit('status-change', 'executing');
-    this.emit('log', `Starting Browser Use task: ${task.task}`);
+    this.emit('log', `🚀 Starting task: ${task.task}`);
 
     try {
-      // Use real Browser Use execution instead of simulation
-      const result = await this.executeBrowserUseTask(task);
+      // Step 1: Classify the task
+      const taskType = this.classifyTask(task.task);
+      this.emit('log', `📊 Task classified as: ${taskType}`);
+
+      let result;
+      
+      if (taskType === 'AI_RESEARCH') {
+        // Step 2a: Execute via direct AI research
+        this.emit('log', '🧠 Executing via AI research (fast path)');
+        result = await this.executeAIResearch(task.task, task.credentials);
+        
+      } else {
+        // Step 2b: Execute via browser automation
+        this.emit('log', '🌐 Executing via browser automation');
+        result = await this.executeBrowserUseTask(task);
+      }
       
       this.currentTask = null;
       this.emit('status-change', 'ready');
-      this.emit('log', `Browser Use task completed: ${result}`);
+      this.emit('log', `✅ Task completed successfully`);
       
       return result;
       
     } catch (error) {
       this.currentTask = null;
       this.emit('status-change', 'error');
-      this.emit('log', `Browser Use task failed: ${error.message}`, 'error');
+      this.emit('log', `❌ Task failed: ${error.message}`, 'error');
       throw error;
     }
   }

@@ -51,6 +51,90 @@ class BrowserUseAgent:
         print(f"BROWSERUSE_LOG:{json.dumps(log_entry)}")
         sys.stdout.flush()
 
+    def classify_task(self, task: str) -> str:
+        """Classify task to determine if it needs browser automation or can use direct API."""
+        task_lower = task.lower()
+        
+        # Tasks that definitely need browser automation
+        web_action_keywords = [
+            'click', 'fill', 'form', 'login', 'navigate', 'screenshot', 'scroll',
+            'download', 'upload', 'button', 'link', 'menu', 'select', 'type',
+            'submit', 'sign in', 'sign up', 'enter', 'input'
+        ]
+        
+        # Tasks that can be done via direct API/research
+        research_keywords = [
+            'research', 'analyze', 'summarize', 'compare', 'evaluate', 'find information',
+            'tell me about', 'what is', 'explain', 'describe', 'overview', 'report',
+            'equity research', 'financial analysis', 'company analysis', 'market research'
+        ]
+        
+        # Check for web actions first (higher priority)
+        if any(keyword in task_lower for keyword in web_action_keywords):
+            return 'BROWSER_ACTION'
+        
+        # Check for research tasks
+        if any(keyword in task_lower for keyword in research_keywords):
+            return 'AI_RESEARCH'
+        
+        # Default to browser action for safety
+        return 'BROWSER_ACTION'
+
+    async def execute_ai_research(self, task: str, credentials: Dict[str, str] = None) -> str:
+        """Execute research task using direct API without browser automation."""
+        try:
+            self.log("info", f"Executing AI research task: {task}")
+            
+            # Enhanced prompt for research tasks
+            research_prompt = f"""
+            You are a professional research assistant. Please provide comprehensive, accurate information for the following request:
+
+            {task}
+
+            Please structure your response with:
+            1. Executive Summary
+            2. Key Findings
+            3. Detailed Analysis
+            4. Sources and Methodology (note: this is based on training data)
+            5. Conclusion
+
+            Be thorough but concise. Focus on factual, actionable information.
+            """
+            
+            # Use OpenAI API directly for research
+            try:
+                import openai
+                openai.api_key = self.api_key
+                
+                response = openai.ChatCompletion.create(
+                    model=self.model_name,
+                    messages=[
+                        {"role": "system", "content": "You are a professional research assistant."},
+                        {"role": "user", "content": research_prompt}
+                    ],
+                    max_tokens=2000,
+                    temperature=0.7
+                )
+                
+                result = response.choices[0].message.content.strip()
+                
+            except ImportError:
+                # Fallback: Create a simple agent for research
+                research_agent = Agent(
+                    task=research_prompt,
+                    llm=self.llm
+                )
+                result = await research_agent.run()
+                result = self.format_result(result)
+            
+            self.log("info", "AI research completed successfully")
+            return result
+            
+        except Exception as e:
+            error_msg = f"AI research failed: {str(e)}"
+            self.log("error", error_msg)
+            raise Exception(error_msg)
+
     async def create_agent(self, task: str) -> Agent:
         """Create a Browser Use agent with the given task."""
         try:
@@ -163,10 +247,31 @@ class BrowserUseAgent:
             return f"Task completed, but result formatting failed: {str(result)[:200]}"
 
     async def execute_task(self, task: str, credentials: Dict[str, str] = None) -> str:
-        """Execute a browser automation task using Browser Use."""
+        """Execute a browser automation task using Browser Use or direct API."""
         try:
             self.log("info", f"Starting task execution: {task}")
             
+            # Classify the task
+            task_type = self.classify_task(task)
+            self.log("info", f"Task classified as: {task_type}")
+            
+            # Route to appropriate execution method
+            if task_type == 'AI_RESEARCH':
+                self.log("info", "Routing to AI research (bypassing browser)")
+                return await self.execute_ai_research(task, credentials)
+            else:
+                self.log("info", "Routing to browser automation")
+                return await self.execute_browser_task(task, credentials)
+                
+        except Exception as e:
+            error_msg = f"Task execution failed: {str(e)}"
+            self.log("error", error_msg)
+            self.log("error", f"Traceback: {traceback.format_exc()}")
+            raise Exception(error_msg)
+
+    async def execute_browser_task(self, task: str, credentials: Dict[str, str] = None) -> str:
+        """Execute browser automation task using Browser Use."""
+        try:
             # Inject credentials into task if provided
             if credentials:
                 credential_context = self.format_credentials(credentials)
@@ -186,13 +291,12 @@ class BrowserUseAgent:
             # Format the result properly
             formatted_result = self.format_result(result)
             
-            self.log("info", f"Task execution completed successfully")
+            self.log("info", f"Browser task execution completed successfully")
             return formatted_result
             
         except Exception as e:
-            error_msg = f"Task execution failed: {str(e)}"
+            error_msg = f"Browser task execution failed: {str(e)}"
             self.log("error", error_msg)
-            self.log("error", f"Traceback: {traceback.format_exc()}")
             raise Exception(error_msg)
 
     async def test_connection(self) -> bool:
